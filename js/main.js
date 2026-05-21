@@ -55,6 +55,8 @@ let gameRunning = false;
 
 // ========== VARIABLES PARA JOYSTICK ==========
 let leftStickX = 0, leftStickY = 0;
+let lastWeaponChange = 0;
+const weaponChangeCooldown = 400;
 
 // ========== VECTORES REUTILIZABLES ==========
 const tmpVec1 = new THREE.Vector3();
@@ -70,6 +72,7 @@ let vrWeaponSprite = null;
 let scoreTexture = null;
 let comboTexure = null;
 let weaponTexture = null;
+let vrUI = null;
 
 function createVRUI() {
     // Canvas para puntuación
@@ -388,9 +391,60 @@ function setupController() {
     }
 }
 
-// ========== CAMBIAR ARMA CON STICK IZQUIERDO ==========
-let lastWeaponChange = 0;
-const weaponChangeCooldown = 300;
+// ========== MOVIMIENTO CON JOYSTICK (MEJORADO) ==========
+let movementCheckRunning = false;
+
+function setupVRMovement() {
+    if (movementCheckRunning) return;
+    movementCheckRunning = true;
+    
+    function updateMovementFromGamepad() {
+        if (!isInVR) {
+            movementCheckRunning = false;
+            return;
+        }
+        
+        try {
+            const session = renderer.xr.getSession();
+            if (!session) {
+                requestAnimationFrame(updateMovementFromGamepad);
+                return;
+            }
+            
+            for (let source of session.inputSources) {
+                if (source.handedness === 'left' && source.gamepad) {
+                    const axes = source.gamepad.axes;
+                    leftStickX = Math.abs(axes[0]) > 0.15 ? axes[0] : 0;
+                    leftStickY = Math.abs(axes[1]) > 0.15 ? axes[1] : 0;
+                    break;
+                }
+            }
+        } catch (err) {}
+        
+        requestAnimationFrame(updateMovementFromGamepad);
+    }
+    updateMovementFromGamepad();
+    console.log('🎮 Movimiento con joystick izquierdo activado');
+}
+
+function applyVRMovement(deltaTime) {
+    if (!isInVR) return;
+    if (leftStickX === 0 && leftStickY === 0) return;
+    
+    const speed = 4 * deltaTime;
+    camera.getWorldDirection(tmpForward);
+    tmpForward.y = 0;
+    tmpForward.normalize();
+    tmpRight.crossVectors(new THREE.Vector3(0, 1, 0), tmpForward);
+    
+    camera.position.x += (tmpRight.x * leftStickX + tmpForward.x * leftStickY) * speed;
+    camera.position.z += (tmpRight.z * leftStickX + tmpForward.z * leftStickY) * speed;
+    
+    camera.position.x = Math.max(-12, Math.min(12, camera.position.x));
+    camera.position.z = Math.max(-12, Math.min(12, camera.position.z));
+}
+
+// ========== CAMBIAR ARMA CON STICK (MEJORADO) ==========
 let stickCheckRunning = false;
 
 function checkWeaponChangeFromStick() {
@@ -416,20 +470,43 @@ function checkWeaponChangeFromStick() {
                     const stickY = axes[1] || 0;
                     const now = Date.now();
                     
-                    if (stickY > 0.7 && now - lastWeaponChange > weaponChangeCooldown) {
+                    // Stick ARRIBA -> siguiente arma
+                    if (stickY > 0.6 && now - lastWeaponChange > weaponChangeCooldown) {
                         lastWeaponChange = now;
                         const weapons = ['sword', 'gun', 'bow'];
                         const currentIndex = weapons.indexOf(getCurrentWeapon());
                         const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
                         switchWeapon(nextWeapon);
                         if (vrUI) vrUI.updateVRUI(gameManager.score, gameManager.combo, nextWeapon);
-                    } else if (stickY < -0.7 && now - lastWeaponChange > weaponChangeCooldown) {
+                        console.log(`🔄 Stick ARRIBA: Arma cambiada a ${nextWeapon}`);
+                        
+                        // Feedback háptico
+                        if (source.gamepad.hapticActuators && source.gamepad.hapticActuators[0]) {
+                            source.gamepad.hapticActuators[0].playEffect('dual-rumble', {
+                                duration: 50,
+                                strongMagnitude: 0.3,
+                                weakMagnitude: 0.2
+                            }).catch(() => {});
+                        }
+                    }
+                    // Stick ABAJO -> arma anterior
+                    else if (stickY < -0.6 && now - lastWeaponChange > weaponChangeCooldown) {
                         lastWeaponChange = now;
                         const weapons = ['sword', 'gun', 'bow'];
                         const currentIndex = weapons.indexOf(getCurrentWeapon());
                         const prevWeapon = weapons[(currentIndex - 1 + weapons.length) % weapons.length];
                         switchWeapon(prevWeapon);
                         if (vrUI) vrUI.updateVRUI(gameManager.score, gameManager.combo, prevWeapon);
+                        console.log(`🔄 Stick ABAJO: Arma cambiada a ${prevWeapon}`);
+                        
+                        // Feedback háptico
+                        if (source.gamepad.hapticActuators && source.gamepad.hapticActuators[0]) {
+                            source.gamepad.hapticActuators[0].playEffect('dual-rumble', {
+                                duration: 50,
+                                strongMagnitude: 0.3,
+                                weakMagnitude: 0.2
+                            }).catch(() => {});
+                        }
                     }
                     break;
                 }
@@ -440,57 +517,7 @@ function checkWeaponChangeFromStick() {
     }
     
     updateStick();
-}
-
-// ========== MOVIMIENTO VR ==========
-let movementCheckRunning = false;
-
-function setupVRMovement() {
-    if (movementCheckRunning) return;
-    movementCheckRunning = true;
-    
-    function updateMovementFromGamepad() {
-        if (!isInVR) {
-            movementCheckRunning = false;
-            return;
-        }
-        
-        try {
-            const session = renderer.xr.getSession();
-            if (!session) {
-                requestAnimationFrame(updateMovementFromGamepad);
-                return;
-            }
-            
-            for (let source of session.inputSources) {
-                if (source.handedness === 'left' && source.gamepad) {
-                    const axes = source.gamepad.axes;
-                    leftStickX = Math.abs(axes[0]) > 0.2 ? axes[0] : 0;
-                    leftStickY = Math.abs(axes[1]) > 0.2 ? axes[1] : 0;
-                    break;
-                }
-            }
-        } catch (err) {}
-        
-        requestAnimationFrame(updateMovementFromGamepad);
-    }
-    updateMovementFromGamepad();
-}
-
-function applyVRMovement(deltaTime) {
-    if (!isInVR) return;
-    if (leftStickX === 0 && leftStickY === 0) return;
-    
-    const speed = 5 * deltaTime;
-    camera.getWorldDirection(tmpForward);
-    tmpForward.y = 0;
-    tmpForward.normalize();
-    tmpRight.crossVectors(new THREE.Vector3(0, 1, 0), tmpForward);
-    
-    camera.position.x += (tmpRight.x * leftStickX + tmpForward.x * leftStickY) * speed;
-    camera.position.z += (tmpRight.z * leftStickX + tmpForward.z * leftStickY) * speed;
-    camera.position.x = Math.max(-15, Math.min(15, camera.position.x));
-    camera.position.z = Math.max(-15, Math.min(15, camera.position.z));
+    console.log('🎮 Cambio de arma con stick izquierdo activado');
 }
 
 function setupHandTracking() {
@@ -536,7 +563,7 @@ function updateSwordWithHand() {
             swordRot = tmpQuat1.clone();
             swinging = isSwinging;
             
-            // Offset hacia adelante (la espada sale del controlador)
+            // Offset hacia adelante
             const offset = new THREE.Vector3(0, 0.05, -0.2).applyQuaternion(swordRot);
             swordPos.add(offset);
             
@@ -699,7 +726,7 @@ function updateInstructions() {
     if (!instructionsEl) return;
     
     if (gameMode === 'vr' && isInVR) {
-        instructionsEl.innerHTML = '⚔️ STICK ARRIBA/ABAJO cambia arma | 🗡️ Espada | 🔫 Pistola | 🏹 Arco | UI visible dentro del casco';
+        instructionsEl.innerHTML = '🕹️ STICK IZQUIERDO: mover | ⬆️⬇️ STICK: cambiar arma | 🎮 GATILLO: disparar/cortar';
         instructionsEl.style.background = 'rgba(0,0,0,0.8)';
         instructionsEl.style.color = '#ffaa44';
     } else if (gameMode === 'pc') {
@@ -786,9 +813,7 @@ vrButton.onclick = async () => {
     }
 };
 
-// ========== UI VR ==========
-let vrUI = null;
-
+// ========== EVENTOS VR ==========
 renderer.xr.addEventListener('sessionstart', () => {
     isInVR = true;
     hideDesktopUI();
@@ -811,7 +836,7 @@ renderer.xr.addEventListener('sessionend', () => {
     console.log('🖥️ Sesión VR terminada');
 });
 
-// Actualizar UI en VR cuando cambia score/combo
+// Actualizar UI en VR
 const originalUpdateUI = updateUI;
 updateUI = function(score, lastPoints) {
     originalUpdateUI(score, lastPoints);
@@ -868,6 +893,7 @@ if (!renderer.xr.isPresenting) {
     requestAnimationFrame(animate);
 }
 
-console.log('⚔️ SLICE MASTER VR - VERSIÓN CORREGIDA');
-console.log('🗡️ ESPADA | 🔫 PISTOLA | 🏹 ARCO');
-console.log('🎮 En VR: UI visible, espada bien posicionada');
+console.log('⚔️ SLICE MASTER VR - VERSIÓN FINAL');
+console.log('🕹️ Stick izquierdo: Moverte');
+console.log('⬆️⬇️ Stick izquierdo: Cambiar arma');
+console.log('🎮 Gatillo: Disparar/Cortar/Cargar');
