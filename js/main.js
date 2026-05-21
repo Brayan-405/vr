@@ -14,7 +14,7 @@ import { createWeaponUI, setupWeaponControls, updateBowChargeUI,
 // ========== RENDERER OPTIMIZADO ==========
 const renderer = new THREE.WebGLRenderer({ antialias: false, xrCompatible: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = false; // Desactivado para mejor rendimiento
+renderer.shadowMap.enabled = false;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
 renderer.xr.enabled = true;
 document.body.appendChild(renderer.domElement);
@@ -56,14 +56,99 @@ let gameRunning = false;
 // ========== VARIABLES PARA JOYSTICK ==========
 let leftStickX = 0, leftStickY = 0;
 
-// ========== VECTORES REUTILIZABLES (para evitar creación en cada frame) ==========
+// ========== VECTORES REUTILIZABLES ==========
 const tmpVec1 = new THREE.Vector3();
 const tmpVec2 = new THREE.Vector3();
 const tmpQuat1 = new THREE.Quaternion();
 const tmpForward = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 
-// ========== UI DEL JUEGO ==========
+// ========== UI EN 3D PARA VR ==========
+let vrScoreSprite = null;
+let vrComboSprite = null;
+let vrWeaponSprite = null;
+let scoreTexture = null;
+let comboTexure = null;
+let weaponTexture = null;
+
+function createVRUI() {
+    // Canvas para puntuación
+    const scoreCanvas = document.createElement('canvas');
+    scoreCanvas.width = 256;
+    scoreCanvas.height = 128;
+    const scoreCtx = scoreCanvas.getContext('2d');
+    scoreTexture = new THREE.CanvasTexture(scoreCanvas);
+    const scoreMaterial = new THREE.SpriteMaterial({ map: scoreTexture });
+    vrScoreSprite = new THREE.Sprite(scoreMaterial);
+    vrScoreSprite.scale.set(1.2, 0.6, 1);
+    vrScoreSprite.position.set(-1, 1.8, -1.2);
+    scene.add(vrScoreSprite);
+    
+    // Canvas para combo
+    const comboCancas = document.createElement('canvas');
+    comboCancas.width = 256;
+    comboCancas.height = 128;
+    const comboCtx = comboCancas.getContext('2d');
+    comboTexure = new THREE.CanvasTexture(comboCancas);
+    const comboMaterial = new THREE.SpriteMaterial({ map: comboTexure });
+    vrComboSprite = new THREE.Sprite(comboMaterial);
+    vrComboSprite.scale.set(1, 0.5, 1);
+    vrComboSprite.position.set(1, 1.8, -1.2);
+    scene.add(vrComboSprite);
+    
+    // Canvas para arma actual
+    const weaponCanvas = document.createElement('canvas');
+    weaponCanvas.width = 256;
+    weaponCanvas.height = 128;
+    const weaponCtx = weaponCanvas.getContext('2d');
+    weaponTexture = new THREE.CanvasTexture(weaponCanvas);
+    const weaponMaterial = new THREE.SpriteMaterial({ map: weaponTexture });
+    vrWeaponSprite = new THREE.Sprite(weaponMaterial);
+    vrWeaponSprite.scale.set(1, 0.5, 1);
+    vrWeaponSprite.position.set(0, 1.8, -1.2);
+    scene.add(vrWeaponSprite);
+    
+    function updateVRUI(score, combo, weapon) {
+        // Actualizar puntuación
+        scoreCtx.fillStyle = 'rgba(0,0,0,0.7)';
+        scoreCtx.fillRect(0, 0, scoreCanvas.width, scoreCanvas.height);
+        scoreCtx.font = 'Bold 36px Arial';
+        scoreCtx.fillStyle = '#ffaa44';
+        scoreCtx.textAlign = 'center';
+        scoreCtx.fillText(`🍎 ${Math.floor(score)}`, scoreCanvas.width/2, 60);
+        scoreTexture.needsUpdate = true;
+        
+        // Actualizar combo
+        comboCtx.fillStyle = 'rgba(0,0,0,0.7)';
+        comboCtx.fillRect(0, 0, comboCancas.width, comboCancas.height);
+        comboCtx.font = 'Bold 30px Arial';
+        comboCtx.fillStyle = combo >= 3 ? '#ff66ff' : '#ffaa44';
+        comboCtx.textAlign = 'center';
+        comboCtx.fillText(`🔥 x${combo.toFixed(1)}`, comboCancas.width/2, 60);
+        comboTexure.needsUpdate = true;
+        
+        // Actualizar arma
+        weaponCtx.fillStyle = 'rgba(0,0,0,0.7)';
+        weaponCtx.fillRect(0, 0, weaponCanvas.width, weaponCanvas.height);
+        weaponCtx.font = '30px Arial';
+        weaponCtx.fillStyle = '#ffaa44';
+        weaponCtx.textAlign = 'center';
+        
+        let weaponIcon = '';
+        let weaponName = '';
+        switch(weapon) {
+            case 'sword': weaponIcon = '🗡️'; weaponName = 'ESPADA'; break;
+            case 'gun': weaponIcon = '🔫'; weaponName = 'PISTOLA'; break;
+            case 'bow': weaponIcon = '🏹'; weaponName = 'ARCO'; break;
+        }
+        weaponCtx.fillText(`${weaponIcon} ${weaponName}`, weaponCanvas.width/2, 60);
+        weaponTexture.needsUpdate = true;
+    }
+    
+    return { updateVRUI };
+}
+
+// ========== UI DEL JUEGO (HTML) ==========
 function updateUI(score, lastPoints) {
     const scoreEl = document.getElementById('score');
     if (scoreEl) {
@@ -264,7 +349,6 @@ function setupController() {
             console.log('✅ Controlador VR detectado');
         }
         
-        // Limpiar eventos previos para evitar duplicados
         controller.removeAllListeners();
         
         controller.addEventListener('selectstart', () => {
@@ -300,15 +384,11 @@ function setupController() {
         
         scene.add(controller);
     } else if (!controllerDetected) {
-        // Solo log cada 2 segundos para no saturar
-        if (Math.floor(Date.now() / 2000) !== Math.floor((Date.now() - 2000) / 2000)) {
-            console.log('⏳ Esperando controlador...');
-        }
         setTimeout(setupController, 500);
     }
 }
 
-// ========== CAMBIAR ARMA CON STICK IZQUIERDO (VR) ==========
+// ========== CAMBIAR ARMA CON STICK IZQUIERDO ==========
 let lastWeaponChange = 0;
 const weaponChangeCooldown = 300;
 let stickCheckRunning = false;
@@ -342,72 +422,24 @@ function checkWeaponChangeFromStick() {
                         const currentIndex = weapons.indexOf(getCurrentWeapon());
                         const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
                         switchWeapon(nextWeapon);
-                        showVRWeaponChange(nextWeapon);
+                        if (vrUI) vrUI.updateVRUI(gameManager.score, gameManager.combo, nextWeapon);
                     } else if (stickY < -0.7 && now - lastWeaponChange > weaponChangeCooldown) {
                         lastWeaponChange = now;
                         const weapons = ['sword', 'gun', 'bow'];
                         const currentIndex = weapons.indexOf(getCurrentWeapon());
                         const prevWeapon = weapons[(currentIndex - 1 + weapons.length) % weapons.length];
                         switchWeapon(prevWeapon);
-                        showVRWeaponChange(prevWeapon);
+                        if (vrUI) vrUI.updateVRUI(gameManager.score, gameManager.combo, prevWeapon);
                     }
                     break;
                 }
             }
-        } catch (err) {
-            // Silencioso para no saturar
-        }
+        } catch (err) {}
         
         requestAnimationFrame(updateStick);
     }
     
     updateStick();
-}
-
-// ========== NOTIFICACIÓN VISUAL DE CAMBIO DE ARMA (VR) - OPTIMIZADA ==========
-let weaponCanvas = null;
-let weaponTexture = null;
-let weaponSprite = null;
-
-function createVRWeaponUI() {
-    weaponCanvas = document.createElement('canvas');
-    weaponCanvas.width = 256;
-    weaponCanvas.height = 128;
-    weaponTexture = new THREE.CanvasTexture(weaponCanvas);
-    const material = new THREE.SpriteMaterial({ map: weaponTexture });
-    weaponSprite = new THREE.Sprite(material);
-    weaponSprite.scale.set(0.8, 0.4, 1);
-    weaponSprite.position.set(0, 1.5, -1);
-    scene.add(weaponSprite);
-    weaponSprite.visible = false;
-}
-
-function showVRWeaponChange(weapon) {
-    if (!weaponCanvas) createVRWeaponUI();
-    if (!weaponSprite) return;
-    
-    const ctx = weaponCanvas.getContext('2d');
-    ctx.fillStyle = 'rgba(0,0,0,0.8)';
-    ctx.fillRect(0, 0, weaponCanvas.width, weaponCanvas.height);
-    ctx.fillStyle = '#ffaa44';
-    ctx.font = 'Bold 24px Arial';
-    ctx.textAlign = 'center';
-    
-    let icon = '';
-    let name = '';
-    switch(weapon) {
-        case 'sword': icon = '🗡️'; name = 'ESPADA'; break;
-        case 'gun': icon = '🔫'; name = 'PISTOLA'; break;
-        case 'bow': icon = '🏹'; name = 'ARCO'; break;
-    }
-    ctx.fillText(icon, weaponCanvas.width/2, 40);
-    ctx.font = '20px Arial';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(name, weaponCanvas.width/2, 85);
-    
-    weaponTexture.needsUpdate = true;
-    weaponSprite.visible = true;
-    setTimeout(() => { if (weaponSprite) weaponSprite.visible = false; }, 1500);
 }
 
 // ========== MOVIMIENTO VR ==========
@@ -438,9 +470,7 @@ function setupVRMovement() {
                     break;
                 }
             }
-        } catch (err) {
-            // Silencioso
-        }
+        } catch (err) {}
         
         requestAnimationFrame(updateMovementFromGamepad);
     }
@@ -490,7 +520,7 @@ function setupHandTracking() {
     }
 }
 
-// ========== ACTUALIZAR ESPADA (OPTIMIZADA) ==========
+// ========== ACTUALIZAR ESPADA (CORREGIDA) ==========
 function updateSwordWithHand() {
     if (!gameRunning) return;
     
@@ -499,7 +529,6 @@ function updateSwordWithHand() {
     const controller = renderer.xr.getController(0);
     
     if (isInVR && controller) {
-        // Usar getWorldPosition para mayor precisión
         controller.getWorldPosition(tmpVec1);
         if (tmpVec1.length() > 0.01) {
             swordPos = tmpVec1.clone();
@@ -507,13 +536,8 @@ function updateSwordWithHand() {
             swordRot = tmpQuat1.clone();
             swinging = isSwinging;
             
-            // Calcular dirección hacia adelante
-            tmpForward.set(0, 0, -1).applyQuaternion(swordRot);
-            const quat = new THREE.Quaternion();
-            quat.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tmpForward);
-            swordRot = quat;
-            
-            const offset = tmpForward.clone().multiplyScalar(0.2);
+            // Offset hacia adelante (la espada sale del controlador)
+            const offset = new THREE.Vector3(0, 0.05, -0.2).applyQuaternion(swordRot);
             swordPos.add(offset);
             
             if (swordManager && swordManager.swordGroup) {
@@ -524,7 +548,6 @@ function updateSwordWithHand() {
         } else {
             return;
         }
-        
     } else if (gameMode === 'pc') {
         if (!mouseLocked) return;
         camera.getWorldDirection(tmpForward);
@@ -579,17 +602,8 @@ function updateSwordWithHand() {
             const effect = powerUpManager.activateEffect(p, gameManager, fruitManager, swordManager);
             soundManager.playPowerUp();
             effectManager.createSliceEffect(swordTip, 'star');
-            showPowerUpNotification(effect);
         });
     }
-}
-
-function showPowerUpNotification(effect) {
-    const notification = document.createElement('div');
-    notification.textContent = `${effect.icon} ${effect.effect} x${effect.duration}s!`;
-    notification.style.cssText = 'position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:#ffaa44;padding:15px 30px;border-radius:30px;font-size:24px;font-weight:bold;z-index:1000;pointer-events:none;font-family:monospace;border:2px solid ' + effect.color + ';box-shadow:0 0 20px ' + effect.color;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.remove(), 2000);
 }
 
 // ========== MODO PC ==========
@@ -685,11 +699,11 @@ function updateInstructions() {
     if (!instructionsEl) return;
     
     if (gameMode === 'vr' && isInVR) {
-        instructionsEl.innerHTML = '⚔️ STICK ARRIBA/ABAJO cambia arma | 🗡️ Espada | 🔫 Pistola | 🏹 Arco';
+        instructionsEl.innerHTML = '⚔️ STICK ARRIBA/ABAJO cambia arma | 🗡️ Espada | 🔫 Pistola | 🏹 Arco | UI visible dentro del casco';
         instructionsEl.style.background = 'rgba(0,0,0,0.8)';
         instructionsEl.style.color = '#ffaa44';
     } else if (gameMode === 'pc') {
-        instructionsEl.innerHTML = '🗡️ ESPADA: click izq + mover | 🔫 PISTOLA: click derecho | 🏹 ARCO: mantener click izq | 🔄 Cambia arma abajo derecha';
+        instructionsEl.innerHTML = '🗡️ ESPADA: click izq + mover | 🔫 PISTOLA: click derecho | 🏹 ARCO: mantener click izq';
         instructionsEl.style.background = 'rgba(0,0,0,0.5)';
         instructionsEl.style.color = '#aaa';
     }
@@ -722,29 +736,24 @@ vrButton.textContent = '🔮 ENTER VR';
 vrButton.style.cssText = 'position:absolute;bottom:20px;right:20px;padding:15px 30px;background:#ff4400;color:white;border:none;border-radius:8px;cursor:pointer;z-index:100;font-size:18px;font-weight:bold;display:none';
 document.body.appendChild(vrButton);
 
-// ========== BOTÓN VR CORREGIDO ==========
 vrButton.onclick = async () => {
     try {
         if (renderer.xr.isPresenting) {
             await renderer.xr.getSession()?.end();
-            renderer.setAnimationLoop(null); // Detener loop de VR
+            renderer.setAnimationLoop(null);
             vrButton.textContent = '🔮 ENTER VR';
             vrButton.style.background = '#ff4400';
             isInVR = false;
-            handTrackingAvailable = false;
             updateInstructions();
         } else {
-            // Configurar renderer para VR
             renderer.setSize(window.innerWidth, window.innerHeight, false);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
             
-            // Solicitar sesión VR con características
             const session = await navigator.xr.requestSession('immersive-vr', {
                 requiredFeatures: ['local-floor'],
                 optionalFeatures: ['hand-tracking']
             });
             
-            // Solicitar reference space seguro
             try {
                 await session.requestReferenceSpace('local-floor');
             } catch (e) {
@@ -753,7 +762,7 @@ vrButton.onclick = async () => {
             }
             
             await renderer.xr.setSession(session);
-            renderer.setAnimationLoop(animate); // Usar setAnimationLoop para VR
+            renderer.setAnimationLoop(animate);
             
             vrButton.textContent = '⬅️ SALIR VR';
             vrButton.style.background = '#ff6688';
@@ -766,58 +775,19 @@ vrButton.onclick = async () => {
                 setupHandTracking();
                 ensureSwordIsVisible();
                 updateInstructions();
-                createVRWeaponUI();
             }, 500);
             
             hideDesktopUI();
-            console.log('🥽 Modo VR activado optimizado');
+            console.log('🥽 Modo VR activado');
         }
     } catch (err) {
         console.error('Error VR:', err);
-        
-        let errorMsg = 'Error al entrar a VR.\n\n';
-        if (err.message.includes('reference space')) {
-            errorMsg += 'SOLUCIÓN:\n1. Cierra el navegador en las gafas\n2. Borra caché\n3. Reinicia las gafas';
-        } else {
-            errorMsg += err.message;
-        }
-        alert(errorMsg);
+        alert('Error al entrar a VR: ' + err.message);
     }
 };
 
-// ========== UI VR OPTIMIZADA ==========
+// ========== UI VR ==========
 let vrUI = null;
-let vrUICanvas = null;
-let vrUITexture = null;
-let vrUISprite = null;
-
-function createVRUI() {
-    vrUICanvas = document.createElement('canvas');
-    vrUICanvas.width = 512;
-    vrUICanvas.height = 256;
-    const ctx = vrUICanvas.getContext('2d');
-    vrUITexture = new THREE.CanvasTexture(vrUICanvas);
-    const material = new THREE.SpriteMaterial({ map: vrUITexture });
-    vrUISprite = new THREE.Sprite(material);
-    vrUISprite.scale.set(1.5, 0.75, 1);
-    vrUISprite.position.set(0, 1.8, -1.2);
-    scene.add(vrUISprite);
-    
-    function updateVRUI(score, combo) {
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(0, 0, vrUICanvas.width, vrUICanvas.height);
-        ctx.font = 'Bold 48px Arial';
-        ctx.fillStyle = '#ffaa44';
-        ctx.textAlign = 'center';
-        ctx.fillText(`🍎 ${Math.floor(score)}`, vrUICanvas.width/2, 70);
-        ctx.font = '32px Arial';
-        ctx.fillStyle = combo >= 3 ? '#ff66ff' : '#ffaa44';
-        ctx.fillText(`🔥 x${combo.toFixed(1)}`, vrUICanvas.width/2, 140);
-        vrUITexture.needsUpdate = true;
-    }
-    
-    return { updateVRUI, sprite: vrUISprite };
-}
 
 renderer.xr.addEventListener('sessionstart', () => {
     isInVR = true;
@@ -825,32 +795,33 @@ renderer.xr.addEventListener('sessionstart', () => {
     ensureSwordIsVisible();
     soundManager.resume();
     vrUI = createVRUI();
+    vrUI.updateVRUI(0, 1, getCurrentWeapon());
     soundManager.startBackgroundMusic();
-    console.log('🥽 Sesión VR iniciada');
+    console.log('🥽 Sesión VR iniciada con UI 3D');
 });
 
 renderer.xr.addEventListener('sessionend', () => {
     isInVR = false;
-    handTrackingAvailable = false;
-    rightHand = null;
-    leftHand = null;
-    if (vrUI && vrUI.sprite) scene.remove(vrUI.sprite);
+    if (vrScoreSprite) scene.remove(vrScoreSprite);
+    if (vrComboSprite) scene.remove(vrComboSprite);
+    if (vrWeaponSprite) scene.remove(vrWeaponSprite);
     vrUI = null;
     showDesktopUI();
     updateInstructions();
     console.log('🖥️ Sesión VR terminada');
 });
 
+// Actualizar UI en VR cuando cambia score/combo
 const originalUpdateUI = updateUI;
 updateUI = function(score, lastPoints) {
     originalUpdateUI(score, lastPoints);
-    if (vrUI) vrUI.updateVRUI(score, gameManager.combo);
+    if (vrUI) vrUI.updateVRUI(score, gameManager.combo, getCurrentWeapon());
 };
 
 const originalUpdateCombo = updateCombo;
 updateCombo = function(combo) {
     originalUpdateCombo(combo);
-    if (vrUI && gameManager) vrUI.updateVRUI(gameManager.score, combo);
+    if (vrUI && gameManager) vrUI.updateVRUI(gameManager.score, combo, getCurrentWeapon());
 };
 
 // ========== INICIALIZAR ==========
@@ -859,9 +830,8 @@ ensureSwordIsVisible();
 setupMenu();
 createWeaponUI();
 setupWeaponControls(fruitManager, effectManager, soundManager, gameManager, camera, scene);
-createVRWeaponUI();
 
-// ========== LOOP PRINCIPAL (se usa setAnimationLoop para VR) ==========
+// ========== LOOP PRINCIPAL ==========
 let lastTime = 0;
 
 function animate() {
@@ -889,17 +859,15 @@ function animate() {
     
     renderer.render(scene, camera);
     
-    // Solo continuar con requestAnimationFrame si no estamos en VR
     if (!isInVR && !renderer.xr.isPresenting) {
         requestAnimationFrame(animate);
     }
 }
 
-// Iniciar animación (setAnimationLoop se usa en VR, requestAnimationFrame en PC)
 if (!renderer.xr.isPresenting) {
     requestAnimationFrame(animate);
 }
 
-console.log('⚔️ SLICE MASTER VR - VERSIÓN OPTIMIZADA');
+console.log('⚔️ SLICE MASTER VR - VERSIÓN CORREGIDA');
 console.log('🗡️ ESPADA | 🔫 PISTOLA | 🏹 ARCO');
-console.log('🎮 En VR: Stick arriba/abajo cambia de arma');
+console.log('🎮 En VR: UI visible, espada bien posicionada');
