@@ -57,7 +57,6 @@ let gameRunning = false;
 let leftStickX = 0, leftStickY = 0;
 let lastWeaponChange = 0;
 const weaponChangeCooldown = 400;
-let joystickDebugCounter = 0;
 
 // ========== VECTORES REUTILIZABLES ==========
 const tmpVec1 = new THREE.Vector3();
@@ -76,6 +75,7 @@ let weaponTexture = null;
 let vrUI = null;
 
 function createVRUI() {
+    // Canvas para puntuación
     const scoreCanvas = document.createElement('canvas');
     scoreCanvas.width = 256;
     scoreCanvas.height = 128;
@@ -87,6 +87,7 @@ function createVRUI() {
     vrScoreSprite.position.set(-1, 1.8, -1.2);
     scene.add(vrScoreSprite);
     
+    // Canvas para combo
     const comboCancas = document.createElement('canvas');
     comboCancas.width = 256;
     comboCancas.height = 128;
@@ -98,6 +99,7 @@ function createVRUI() {
     vrComboSprite.position.set(1, 1.8, -1.2);
     scene.add(vrComboSprite);
     
+    // Canvas para arma actual
     const weaponCanvas = document.createElement('canvas');
     weaponCanvas.width = 256;
     weaponCanvas.height = 128;
@@ -110,6 +112,7 @@ function createVRUI() {
     scene.add(vrWeaponSprite);
     
     function updateVRUI(score, combo, weapon) {
+        // Actualizar puntuación
         scoreCtx.fillStyle = 'rgba(0,0,0,0.7)';
         scoreCtx.fillRect(0, 0, scoreCanvas.width, scoreCanvas.height);
         scoreCtx.font = 'Bold 36px Arial';
@@ -118,6 +121,7 @@ function createVRUI() {
         scoreCtx.fillText(`🍎 ${Math.floor(score)}`, scoreCanvas.width/2, 60);
         scoreTexture.needsUpdate = true;
         
+        // Actualizar combo
         comboCtx.fillStyle = 'rgba(0,0,0,0.7)';
         comboCtx.fillRect(0, 0, comboCancas.width, comboCancas.height);
         comboCtx.font = 'Bold 30px Arial';
@@ -126,13 +130,15 @@ function createVRUI() {
         comboCtx.fillText(`🔥 x${combo.toFixed(1)}`, comboCancas.width/2, 60);
         comboTexure.needsUpdate = true;
         
+        // Actualizar arma
         weaponCtx.fillStyle = 'rgba(0,0,0,0.7)';
         weaponCtx.fillRect(0, 0, weaponCanvas.width, weaponCanvas.height);
         weaponCtx.font = '30px Arial';
         weaponCtx.fillStyle = '#ffaa44';
         weaponCtx.textAlign = 'center';
         
-        let weaponIcon = '', weaponName = '';
+        let weaponIcon = '';
+        let weaponName = '';
         switch(weapon) {
             case 'sword': weaponIcon = '🗡️'; weaponName = 'ESPADA'; break;
             case 'gun': weaponIcon = '🔫'; weaponName = 'PISTOLA'; break;
@@ -204,7 +210,9 @@ function hideMenu() {
     
     if (menu) {
         menu.style.opacity = '0';
-        setTimeout(() => { menu.style.display = 'none'; }, 500);
+        setTimeout(() => {
+            menu.style.display = 'none';
+        }, 500);
     }
     if (gameUI) {
         gameUI.style.display = 'block';
@@ -287,13 +295,24 @@ function setupMenu() {
     const closeInstructionsBtn = document.getElementById('closeInstructionsBtn');
     const instructionsPanel = document.getElementById('instructionsPanel');
     
-    if (playVRBtn) playVRBtn.addEventListener('click', startVRMode);
-    if (playPCBtn) playPCBtn.addEventListener('click', startPCMode);
-    if (instructionsBtn && instructionsPanel) {
-        instructionsBtn.addEventListener('click', () => instructionsPanel.classList.toggle('show'));
+    if (playVRBtn) {
+        playVRBtn.addEventListener('click', startVRMode);
     }
+    
+    if (playPCBtn) {
+        playPCBtn.addEventListener('click', startPCMode);
+    }
+    
+    if (instructionsBtn && instructionsPanel) {
+        instructionsBtn.addEventListener('click', () => {
+            instructionsPanel.classList.toggle('show');
+        });
+    }
+    
     if (closeInstructionsBtn && instructionsPanel) {
-        closeInstructionsBtn.addEventListener('click', () => instructionsPanel.classList.remove('show'));
+        closeInstructionsBtn.addEventListener('click', () => {
+            instructionsPanel.classList.remove('show');
+        });
     }
 }
 
@@ -337,7 +356,6 @@ function setupController() {
         
         controller.addEventListener('selectstart', () => {
             const currentWeapon = getCurrentWeapon();
-            console.log(`🎮 Gatillo presionado - Arma actual: ${currentWeapon}`);
             
             if (currentWeapon === 'gun') {
                 shootGun(fruitManager, effectManager, soundManager, gameManager, camera, scene);
@@ -373,14 +391,12 @@ function setupController() {
     }
 }
 
-// ========== MOVIMIENTO CON JOYSTICK ==========
+// ========== MOVIMIENTO CON JOYSTICK (MEJORADO) ==========
 let movementCheckRunning = false;
 
 function setupVRMovement() {
     if (movementCheckRunning) return;
     movementCheckRunning = true;
-    
-    console.log('🎮 Iniciando detección de joystick...');
     
     function updateMovementFromGamepad() {
         if (!isInVR) {
@@ -400,13 +416,6 @@ function setupVRMovement() {
                     const axes = source.gamepad.axes;
                     leftStickX = Math.abs(axes[0]) > 0.15 ? axes[0] : 0;
                     leftStickY = Math.abs(axes[1]) > 0.15 ? axes[1] : 0;
-                    
-                    // Log cada 60 frames
-                    joystickDebugCounter++;
-                    if (joystickDebugCounter > 60 && (leftStickX !== 0 || leftStickY !== 0)) {
-                        joystickDebugCounter = 0;
-                        console.log(`🕹️ Stick: X=${leftStickX.toFixed(2)}, Y=${leftStickY.toFixed(2)}`);
-                    }
                     break;
                 }
             }
@@ -415,15 +424,11 @@ function setupVRMovement() {
         requestAnimationFrame(updateMovementFromGamepad);
     }
     updateMovementFromGamepad();
+    console.log('🎮 Movimiento con joystick izquierdo activado');
 }
 
 function applyVRMovement(deltaTime) {
     if (!isInVR) return;
-    
-    if (leftStickX !== 0 || leftStickY !== 0) {
-        console.log(`🏃 Moviendo: X=${leftStickX.toFixed(2)}, Y=${leftStickY.toFixed(2)}`);
-    }
-    
     if (leftStickX === 0 && leftStickY === 0) return;
     
     const speed = 4 * deltaTime;
@@ -439,14 +444,12 @@ function applyVRMovement(deltaTime) {
     camera.position.z = Math.max(-12, Math.min(12, camera.position.z));
 }
 
-// ========== CAMBIAR ARMA CON STICK ==========
+// ========== CAMBIAR ARMA CON STICK (MEJORADO) ==========
 let stickCheckRunning = false;
 
 function checkWeaponChangeFromStick() {
     if (stickCheckRunning) return;
     stickCheckRunning = true;
-    
-    console.log('🎮 Iniciando detección de cambio de arma con stick...');
     
     function updateStick() {
         if (!isInVR) {
@@ -467,6 +470,7 @@ function checkWeaponChangeFromStick() {
                     const stickY = axes[1] || 0;
                     const now = Date.now();
                     
+                    // Stick ARRIBA -> siguiente arma
                     if (stickY > 0.6 && now - lastWeaponChange > weaponChangeCooldown) {
                         lastWeaponChange = now;
                         const weapons = ['sword', 'gun', 'bow'];
@@ -476,12 +480,16 @@ function checkWeaponChangeFromStick() {
                         if (vrUI) vrUI.updateVRUI(gameManager.score, gameManager.combo, nextWeapon);
                         console.log(`🔄 Stick ARRIBA: Arma cambiada a ${nextWeapon}`);
                         
+                        // Feedback háptico
                         if (source.gamepad.hapticActuators && source.gamepad.hapticActuators[0]) {
                             source.gamepad.hapticActuators[0].playEffect('dual-rumble', {
-                                duration: 50, strongMagnitude: 0.3, weakMagnitude: 0.2
+                                duration: 50,
+                                strongMagnitude: 0.3,
+                                weakMagnitude: 0.2
                             }).catch(() => {});
                         }
                     }
+                    // Stick ABAJO -> arma anterior
                     else if (stickY < -0.6 && now - lastWeaponChange > weaponChangeCooldown) {
                         lastWeaponChange = now;
                         const weapons = ['sword', 'gun', 'bow'];
@@ -491,9 +499,12 @@ function checkWeaponChangeFromStick() {
                         if (vrUI) vrUI.updateVRUI(gameManager.score, gameManager.combo, prevWeapon);
                         console.log(`🔄 Stick ABAJO: Arma cambiada a ${prevWeapon}`);
                         
+                        // Feedback háptico
                         if (source.gamepad.hapticActuators && source.gamepad.hapticActuators[0]) {
                             source.gamepad.hapticActuators[0].playEffect('dual-rumble', {
-                                duration: 50, strongMagnitude: 0.3, weakMagnitude: 0.2
+                                duration: 50,
+                                strongMagnitude: 0.3,
+                                weakMagnitude: 0.2
                             }).catch(() => {});
                         }
                     }
@@ -506,6 +517,7 @@ function checkWeaponChangeFromStick() {
     }
     
     updateStick();
+    console.log('🎮 Cambio de arma con stick izquierdo activado');
 }
 
 function setupHandTracking() {
@@ -535,7 +547,7 @@ function setupHandTracking() {
     }
 }
 
-// ========== ACTUALIZAR ESPADA ==========
+// ========== ACTUALIZAR ESPADA (CORREGIDA) ==========
 function updateSwordWithHand() {
     if (!gameRunning) return;
     
@@ -551,6 +563,7 @@ function updateSwordWithHand() {
             swordRot = tmpQuat1.clone();
             swinging = isSwinging;
             
+            // Offset hacia adelante
             const offset = new THREE.Vector3(0, 0.05, -0.2).applyQuaternion(swordRot);
             swordPos.add(offset);
             
@@ -559,6 +572,8 @@ function updateSwordWithHand() {
             }
             
             updateWeaponModel(getCurrentWeapon(), swordPos, swordRot, getIsCharging(), getBowCharge());
+        } else {
+            return;
         }
     } else if (gameMode === 'pc') {
         if (!mouseLocked) return;
@@ -625,11 +640,18 @@ let mouseX = 0, mouseY = 0;
 const keyState = {};
 
 function setupDesktopControls() {
-    document.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
     
     document.addEventListener('click', () => {
         if (!isInVR && gameMode === 'pc' && !mouseLocked) {
-            try { renderer.domElement.requestPointerLock(); } catch (err) {}
+            try {
+                renderer.domElement.requestPointerLock();
+            } catch (err) {
+                console.log('Error al bloquear mouse:', err);
+            }
         }
     });
     
@@ -669,6 +691,7 @@ function setupDesktopControls() {
     
     document.addEventListener('mouseup', (e) => {
         if (gameMode !== 'pc') return;
+        
         if (e.button === 0) {
             if (getCurrentWeapon() === 'sword') {
                 desktopSwinging = false;
@@ -683,7 +706,8 @@ function setupDesktopControls() {
 }
 
 function updateMovement(deltaTime) {
-    if (gameMode !== 'pc' || !mouseLocked) return;
+    if (gameMode !== 'pc') return;
+    if (!mouseLocked) return;
     
     const speed = 5 * deltaTime;
     camera.getWorldDirection(tmpForward);
@@ -798,7 +822,7 @@ renderer.xr.addEventListener('sessionstart', () => {
     vrUI = createVRUI();
     vrUI.updateVRUI(0, 1, getCurrentWeapon());
     soundManager.startBackgroundMusic();
-    console.log('🥽 Sesión VR iniciada');
+    console.log('🥽 Sesión VR iniciada con UI 3D');
 });
 
 renderer.xr.addEventListener('sessionend', () => {
