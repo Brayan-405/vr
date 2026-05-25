@@ -371,7 +371,7 @@ export function createWeaponUI() {
     document.getElementById('bowBtn').onclick = () => switchWeapon('bow');
 }
 
-// ✅ ESTA ES LA FUNCIÓN QUE FALTABA EXPORTAR
+// ========== SWITCH WEAPON (CORREGIDO CON UI VR) ==========
 export function switchWeapon(weapon) {
     currentWeapon = weapon;
     const weaponIcon = document.getElementById('weaponIcon');
@@ -407,6 +407,17 @@ export function switchWeapon(weapon) {
             weaponAmmo.innerHTML = '💪 Mantén presionado - FLECHA VISIBLE';
             break;
     }
+    
+    // ✅ Actualizar UI en VR si existe
+    if (typeof window !== 'undefined' && window.updateVRUI) {
+        // Intentar obtener score y combo del gameManager (se pasa desde main)
+        if (window.gameManager && window.gameManager.score !== undefined) {
+            window.updateVRUI(window.gameManager.score, window.gameManager.combo || 1, weapon);
+        } else {
+            window.updateVRUI(0, 1, weapon);
+        }
+    }
+    
     console.log(`⚔️ Arma cambiada a: ${weapon}`);
 }
 
