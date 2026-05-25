@@ -81,7 +81,7 @@ function createVRUI() {
     const scoreMaterial = new THREE.SpriteMaterial({ map: scoreTexture });
     vrScoreSprite = new THREE.Sprite(scoreMaterial);
     vrScoreSprite.scale.set(1.2, 0.6, 1);
-    vrScoreSprite.position.set(-1, 1.8, -1.2);
+    vrScoreSprite.position.set(-1.5, 1.5, -2.5);
     scene.add(vrScoreSprite);
     
     // Canvas para combo
@@ -93,7 +93,7 @@ function createVRUI() {
     const comboMaterial = new THREE.SpriteMaterial({ map: comboTexure });
     vrComboSprite = new THREE.Sprite(comboMaterial);
     vrComboSprite.scale.set(1, 0.5, 1);
-    vrComboSprite.position.set(1, 1.8, -1.2);
+    vrComboSprite.position.set(1.5, 1.5, -2.5);
     scene.add(vrComboSprite);
     
     // Canvas para arma actual
@@ -105,7 +105,7 @@ function createVRUI() {
     const weaponMaterial = new THREE.SpriteMaterial({ map: weaponTexture });
     vrWeaponSprite = new THREE.Sprite(weaponMaterial);
     vrWeaponSprite.scale.set(1, 0.5, 1);
-    vrWeaponSprite.position.set(0, 1.8, -1.2);
+    vrWeaponSprite.position.set(0, 1.5, -2.5);
     scene.add(vrWeaponSprite);
     
     function updateVRUI(score, combo, weapon) {

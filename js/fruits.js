@@ -133,7 +133,7 @@ export class FruitManager {
         const velocityX = (Math.random() - 0.5) * 3 * this.speedMultiplier;
         const velocityZ = (Math.random() - 0.5) * 3 * this.speedMultiplier;
         
-        group.position.set(x, -0.5, z);
+        group.position.set(x, 0.5, z);
         group.userData = {
             type: fruitData.name,
             points: fruitData.points,
@@ -193,7 +193,7 @@ export class FruitManager {
         const velocityX = (Math.random() - 0.5) * 2.5 * this.speedMultiplier;
         const velocityZ = (Math.random() - 0.5) * 2.5 * this.speedMultiplier;
         
-        group.position.set(x, -0.5, z);
+        group.position.set(x, 0.5, z);
         group.userData = {
             type: 'bomb',
             points: -50,
@@ -216,7 +216,7 @@ export class FruitManager {
     // En lugar de ángulo completo (0 a 2PI), solo de -90 a +90 grados (frente)
     const angle = (Math.random() - 0.5) * Math.PI; // -90° a +90°
     
-    const radius = 3 + Math.random() * 3;
+    const radius = 1.5 + Math.random() * 1.5;
     
     // Obtener dirección hacia donde mira la cámara
     const cameraDirection = new THREE.Vector3();
